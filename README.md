@@ -1,0 +1,3 @@
+## Mersenne Twister - Linux Kernel Module
+
+This project was done as a small project to introduce myself into Linux kernel programming. The goal was to do something nontrivial, but still easy enough to not distract from the goal of learning how to hack inside the kernel. I chose to implement the Mersenne Twister algorithm - an algorithm for generating random numbers. The Linux kernel already has randomness in the form of /dev/random, but I wanted to make my own.
