@@ -6,7 +6,7 @@
 #include <linux/uaccess.h>
 #include <linux/kern_levels.h>
 #include <linux/jiffies.h>
-
+#include <linux/mutex.h>
 /*
  * Mersenne Twister Linux Kernel Module
  * By Sean Gillespie - Georgia Institute of Technology
@@ -69,6 +69,11 @@ static dev_t device_number;
 static struct cdev char_device;
 static struct class *device_class;
 
+/*
+ * This mutex protects the state of the Mersenne twister.
+ */
+static struct mutex state_mutex; 
+
 static void mersenne_init(int seed) {
     int i;
     index = 0;
@@ -80,6 +85,7 @@ static void mersenne_init(int seed) {
 
 static int mersenne_random_int(void) {
     int out_num;
+    mutex_lock(&state_mutex); // acquire lock
     if (index == 0) {
       mersenne_generate();
     }
@@ -89,6 +95,7 @@ static int mersenne_random_int(void) {
     out_num ^= (out_num << 15) & 0xEFC60000;
     out_num ^= (out_num >> 18);
     index = (index + 1) % MERSENNE_STATE_MATRIX_SIZE;
+    mutex_unlock(&state_mutex); // release lock
     return out_num;
 }
 
@@ -131,8 +138,6 @@ static int mersenne_fill_buf(char __user *buf, size_t size) {
 }
 
 static int mersenne_open(struct inode *node, struct file *file) {
-    // vaugely obscure seed. It really doesn't matter since I don't care if this
-    // module is cryptographically secure.
     printk(KERN_INFO MODULE_NAME ": Device opened\n");
     return 0;
 }
@@ -163,6 +168,8 @@ static const struct file_operations mersenne_file_ops = {
 static int __init mersenne_module_init(void) {
     int err;
     printk(KERN_INFO MODULE_NAME ": Module init\n");
+    // initialize state mutex
+    mutex_init(&state_mutex);
     // first, allocate a region of character device numbers, including a major number
     if ((err = alloc_chrdev_region(&device_number, 0, 1, MODULE_NAME)) < 0) {
 	printk(KERN_ERR MODULE_NAME ": Chrdev allocation failed\n");
@@ -201,6 +208,7 @@ static void __exit mersenne_module_exit(void) {
     device_destroy(device_class, device_number);
     class_destroy(device_class);
     unregister_chrdev_region(device_number, 1);
+    mutex_destroy(&state_mutex);
     printk(KERN_INFO MODULE_NAME ": Module unloading\n");
 }
 
