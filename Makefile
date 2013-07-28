@@ -1,15 +1,10 @@
-obj-m += kernel/linux_twister.o
+SUBDIRS += kernel librand tests
 
-all: kernel-mod tests
+.PHONY: subdirs $(SUBDIRS)
 
-kernel-mod:
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
+subdirs: $(SUBDIRS)
 
-clean-kernel:
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
+$(SUBDIRS):
+	make -C $@
 
-tests:
-	gcc -o mersenne_twister_test tests/mersenne_twister_test.c 
-
-clean-tests:
-	rm mersenne_twister_test
+tests: kernel librand
