@@ -5,6 +5,7 @@
 #include <linux/cdev.h>
 #include <linux/uaccess.h>
 #include <linux/kern_levels.h>
+#include <linux/jiffies.h>
 
 /*
  * Mersenne Twister Linux Kernel Module
@@ -144,7 +145,6 @@ static int mersenne_close(struct inode *node, struct file *file) {
 static ssize_t mersenne_read(struct file *file, char __user *buf, size_t len, loff_t *off) {
   // seek is not supported for this char device, so off is completely ignored
   int err;
-  printk(KERN_INFO MODULE_NAME ": Device read from\n");
   err = mersenne_fill_buf(buf, len);
   if (err < 0) {
     return err;
@@ -161,38 +161,36 @@ static const struct file_operations mersenne_file_ops = {
 };
 
 static int __init mersenne_module_init(void) {
+  int err;
   printk(KERN_INFO MODULE_NAME ": Module init\n");
   // first, allocate a region of character device numbers, including a major number
-  if (alloc_chrdev_region(&device_number, 0, 1, MODULE_NAME) < 0) {
+  if ((err = alloc_chrdev_region(&device_number, 0, 1, MODULE_NAME)) < 0) {
     printk(KERN_ERR MODULE_NAME ": Chrdev allocation failed\n");
-    return -ENOMEM;
+    return err;
   }
   // then, create a class of character devices owned by this module
-  if ((device_class = class_create(THIS_MODULE, MODULE_NAME)) < 0) {
+  if ((device_class = class_create(THIS_MODULE, MODULE_NAME)) == NULL) {
     printk(KERN_ERR MODULE_NAME ": Device class creation failed\n");
     unregister_chrdev_region(device_number, 1);
-    return -ENOMEM; // not sure what kind of error this is
+    return -ENOMEM;
   }
   // then, create the char device using the allocated major number and device class
-  if (device_create(device_class, NULL, device_number, NULL, MERSENNE_DEVICE_NAME) < 0) {
+  if (device_create(device_class, NULL, device_number, NULL, MERSENNE_DEVICE_NAME) == NULL) {
     printk(KERN_ERR MODULE_NAME ": Device create failed\n");
     unregister_chrdev_region(device_number, 1);
     class_destroy(device_class);
-    return -1;
+    return -ENOMEM;
   }
   // once the device is created, initialize it and associate it with the device major number
   cdev_init(&char_device, &mersenne_file_ops);
-  if (cdev_add(&char_device, device_number, 1) < 0) {
+  if ((err = cdev_add(&char_device, device_number, 1)) < 0) {
     printk(KERN_ERR MODULE_NAME ": cdev_add failed\n");
     device_destroy(device_class, device_number);
     class_destroy(device_class);
     unregister_chrdev_region(device_number, 1);
+    return err;
   }
-  // If I really cared about good randomness and cryptographic security,
-  // I wouldn't do this. This wasn't my main goal for this project, though;
-  // I really just wanted to write a kernel module. Maybe I'll come back to this
-  // and seed this correctly later.
-  mersenne_init(0xDEADBEEF);
+  mersenne_init(jiffies); // seed the mersenne twister using jiffies
   printk(KERN_INFO MODULE_NAME ": Init success\n");
   return 0;
 }
