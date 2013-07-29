@@ -1,10 +1,13 @@
-SUBDIRS += kernel librand tests
+SUBDIRS += librand tests
 
-.PHONY: subdirs $(SUBDIRS)
+.PHONY: kernel subdirs $(SUBDIRS)
 
-subdirs: $(SUBDIRS)
+subdirs: kernel $(SUBDIRS)
+
+kernel:
+	@cd kernel; make; cd ..;
 
 $(SUBDIRS):
-	make -C $@
+	@make -C $@
 
 tests: kernel librand
